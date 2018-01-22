@@ -260,246 +260,141 @@ class Model(dict, metaclass=ModelMetaclass):
         super(Model, self).__init__(**kw)
 
     def __getattr__(self, key):
+        """获取属性
+
+        :param key:属性对应的key
+        :return: 属性值
+        """
         try:
             return self[key]
-        except KeyError:
+        except KeyError:    # 如果无法找到则抛出错误
             raise AttributeError(r"'Model' object has no attribute '%s'" % key)
 
     def __setattr__(self, key, value):
+        """设置属性值
+
+        :param key:属性对应的key
+        :param value: 属性设定的值
+        :return:
+        """
         self[key] = value
 
     def getValue(self, key):
+        """获取属性
+
+        :param key:属性的Key
+        :return: 属性的值
+        """
         return getattr(self, key, None)
 
     def getValueOrDefault(self, key):
-        value = getattr(self, key, None)
-        if value is None:
-            field = self.__mappings__[key]
-            if field.default is not None:
-                value = field.default() if callable(field.default) else field.default
-                logging.debug('using default value for %s: %s' % (key, str(value)))
-                setattr(self, key, value)
-        return value
+        """获取属性的值或默认值
+
+        :param key:属性的key
+        :return:属性的值
+        """
+        value = getattr(self, key, None)    # 获取属性的值如果不存在则返回None
+        if value is None:                   # 如果值为空
+            field = self.__mappings__[key]  # 从映射关系获取对应字段
+            if field.default is not None:   # 如果字段默认值不为空
+                value = field.default() if callable(field.default) else field.default   # 如果字段默认值获取为可调用方法则调用方法否则调用属性
+                logging.debug('using default value for %s: %s' % (key, str(value)))     # 将该属性设置为默认值的信息写入日志
+                setattr(self, key, value)                                               # 设置该属性为默认值
+        return value                                                                    # 返回属性值
 
     @classmethod
     async def findAll(cls, where=None, args=None, **kw):
-        sql = [cls.__select__]
-        if where:
-            sql.append('where')
-            sql.append(where)
-        if args is None:
-            args = []
-        orderBy = kw.get('orderBy', None)
-        if orderBy:
-            sql.append('order by')
-            sql.append(orderBy)
-        limit = kw.get('limit', None)
-        if limit is not None:
-            sql.append('limit')
-            if isinstance(limit, int):
-                sql.append('?')
-                args.append(limit)
-            elif isinstance(limit, tuple) and len(limit) == 2:
-                sql.append('?, ?')
-                args.extend(limit)
+        """查找所有记录
+        SQL SELECT 语句参考
+        [http://blog.csdn.net/litong09282039/article/details/46330069]
+
+        :param where:SQL where部分
+        :param args:值部分
+        :param kw:orderBy/limit/
+        :return:查询结果通过本类类型队列的方式返回
+        """
+        sql = [cls.__select__]              # 获取查询语句
+        if where:                           # 如果存在where部分
+            sql.append('where')             # 先把where加字段加进去
+            sql.append(where)               # 这里的字符串对应的是字段
+        if args is None:                    # 参数值如果为空
+            args = []                       # 设置参数值为空队列
+        orderBy = kw.get('orderBy', None)   # 获取orderBy如果不存在设置为None
+        if orderBy:                         # 如果存在orderBy
+            sql.append('order by')          # 加入order by字符串
+            sql.append(orderBy)             # 这里也是字段字符串，用于排序
+        limit = kw.get('limit', None)       # 获取limit如果不存在设置为None
+        if limit is not None:               # 如果在字典中存在limit
+            sql.append('limit')             # 加入limit字符串
+            if isinstance(limit, int):      # 如果该元素为整形
+                sql.append('?')             # 在SQL语句后添加一个'?'
+                args.append(limit)          # 将获取的limit值加入参数队列
+            elif isinstance(limit, tuple) and len(limit) == 2:  # 如果limit是元组类型并且长度为2
+                sql.append('?, ?')          # 在SQL语句后添加'?, ?'
+                args.extend(limit)          # 在参数队列中插入一个limit元组对象
             else:
-                raise ValueError('Invalid limit value: %s' % str(limit))
-        rs = await select(' '.join(sql), args)
-        return [cls(**r) for r in rs]
+                raise ValueError('Invalid limit value: %s' % str(limit))    # 否则报limit值错误
+        rs = await select(' '.join(sql), args)  # 传入参数并执行select查询
+        return [cls(**r) for r in rs]       # 返回结果并将查询结果存入当前类类型的队列
 
     @classmethod
     async def findNumber(cls, selectField, where=None, args=None):
-        sql = ['select %s _num_ from `%s`' % (selectField, cls.__table__)]
+        """查找记录集数量
+
+        :param selectField:查找字段
+        :param where:where语句
+        :param args:值
+        :return:记录数量
+        """
+        sql = ['select %s _num_ from `%s`' % (selectField, cls.__table__)]  # 生成查询语句
         if where:
-            sql.append('where')
-            sql.append(where)
-        rs = await select(' '.join(sql), args, 1)
-        if len(rs) == 0:
+            sql.append('where')     # 如果存在where部分
+            sql.append(where)       # 这里的字符串对应的是字段
+        rs = await select(' '.join(sql), args, 1)   # 查询
+        if len(rs) == 0:            # 如果记录数量为0返回None
             return None
-        return rs[0]['_num_']
+        return rs[0]['_num_']       # 返回记录数量？不太明白为什么要用这样方式
 
     @classmethod
     async def find(cls, pk):
-        rs = await select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
-        if len(rs) == 0:
+        """查找
+
+        :param pk:查找信息(字典)
+        :return:查找记录
+        """
+        rs = await select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)   # 生成查询语句
+        if len(rs) == 0:        # 如果返回记录条数为0则返回None
             return None
-        return cls(**rs[0])
+        return cls(**rs[0])     # 返回类类型数据集
 
     async def save(self):
-        args = list(map(self.getValueOrDefault, self.__fields__))
-        args.append(self.getValueOrDefault(self.__primary_key__))
-        rows = await execute(self.__insert__, args)
-        if rows != 1:
+        """保存
+
+        :return:
+        """
+        args = list(map(self.getValueOrDefault, self.__fields__))   # 生成字段队列
+        args.append(self.getValueOrDefault(self.__primary_key__))   # 加上主键
+        rows = await execute(self.__insert__, args)                 # 插入一条记录
+        if rows != 1:                                               # 如果返回值不为1则报错
             logging.warning('failed to insert record: affected rows: %s' % rows)
 
     async def update(self):
-        args = list(map(self.getValue, self.__fields__))
-        args.append(self.getValue(self.__primary_key__))
-        rows = await execute(self.__update__, args)
-        if rows != 1:
+        """更新记录
+
+        :return:
+        """
+        args = list(map(self.getValue, self.__fields__))    # 生成字段队列
+        args.append(self.getValue(self.__primary_key__))    # 加上主键
+        rows = await execute(self.__update__, args)         # 执行更新操作
+        if rows != 1:                                       # 如果返回值不为1则报错
             logging.warning('failed to update by primary key: affected rows: %s' % rows)
 
     async def remove(self):
-        args = [self.getValue(self.__primary_key__)]
-        rows = await execute(self.__delete__, args)
-        if rows != 1:
+        """删除该记录
+
+        :return:
+        """
+        args = [self.getValue(self.__primary_key__)]    # 获取主键
+        rows = await execute(self.__delete__, args)     # 执行删除操作
+        if rows != 1:                                   # 如果返回值不为1则报错
             logging.warning('failed to remove by primary key: affected rows: %s' % rows)
-
-
-
-
-
-
-class InegerField(Field):
-
-    def __init__(self, name=None, primary_key=False, default=0):
-        super().__init__(name, 'bigint', primary_key, default)
-
-
-class FloatField(Field):
-
-    def __init__(self, name=None, primary_key=False, default=0.0):
-        super().__init__(name, 'real', primary_key, default)
-
-class TextField(Field):
-
-    def __init__(self, name=None, default=None):
-        super().__init__(name, 'text', False, default)
-
-class ModelMetaclass(type):
-
-    def __new__(cls, name, bases, attrs):
-        if name=='Model':
-            return type.__new__(cls, name, bases, attrs)
-        tableName = attrs.get('__table__', None) or name
-        logging.info('found model: %s (table: %s)') % (name, tableName)
-        mappings = dict()
-        fields = []
-        primarykey = None
-        for k, v in attrs.items():
-            if isinstance(v, Field):
-                logging.info(' found mapping:%s ==> %s' % (k , v))
-                mappings[k] = v
-                if v.primary_key:
-                    # 找到主键
-                    if primarykey:
-                        raise RuntimeError('Duplicate primary key for field: %s' % k)
-                    primarykey = k
-                else:
-                    fields.append(k)
-        if not primarykey:
-            raise RuntimeError('Primary key not found.')
-        for k in mappings.keys():
-            attrs.pop(k)
-        escaped_fields = list(map(lambda f: '`%s`' % f, fields))
-        attrs['__mappings__'] = mappings
-        attrs['__table__'] = tableName
-        attrs['__primary_key__'] = primarykey
-        attrs['__fields__'] = fields
-        attrs['__select__'] = 'select `%s`, %s from `%s`' % (primarykey, ', '.join(escaped_fields), tableName)
-        attrs['__insert__'] = 'insert into `%s` (%s, `%s`) values(%s)' % (tableName, ', '.join(escaped_fields), primarykey, create_args_string(len(escaped_fields) + 1))
-        attrs['__update__'] = 'update `%s` set %s where `%s`=?' % (tableName, ', '.join(map(lambda f:'`%s`=?' % (mappings.get(f).name or f),fields)), primarykey)
-        attrs['__delete__'] = 'delete from `%s` where `%s`=?' % (tableName, primarykey)
-        return type.__new__(cls, name, bases, attrs)
-
-class Model(dict, metaclass=ModelMetaclass):
-
-    def __init__(self, **kw):
-        super(Model, self).__init__(**kw)
-
-    def __getattr__(self, key):
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError(r"'Model' object has no attribute '%s'" % key)
-
-    def __setattr__(self, key, value):
-        self[key]  = value
-
-    def getValue(self, key):
-        return getattr(self, key, None)
-
-    def getValueOrDefault(self, key):
-        value = getattr(self, key, None)
-        if value is None:
-            filed = self.__mappings__[key]
-            if filed.default is not None:
-                value = field.default() if callable(field.default) else field.default
-                logging.debug('using default value for %s: %s' % (key, str(value)))
-                setattr(self, key, value)
-        return value
-
-@classmethod
-async  def findAll(cls, where=None, args=None, **kw):
-    ' find objects by where clause'
-    sql = [cls.__select__]
-    if where:
-        sql.append('where')
-        sql.append(where)
-    if args is None:
-        args = []
-    orderBy = kw.get('orderBy', None)
-    if orderBy:
-        sql.append('order by')
-        sql.append(orderBy)
-    limit = kw.get('limit', None)
-    if limit is not None:
-        sql.append('limit')
-        if isinstance(limit, int):
-            sql.append('?')
-            args.append(limit)
-        elif isinstance(limit,tuple) and len(limit) == 2:
-            sql.append('?, ?')
-            args.extend(limit)
-        else:
-            raise ValueError('Invalid limit value: %s' % str(limit))
-    rs = await select(' '.join(sql), args)
-    return [cls(**r) for r in rs]
-
-
-@classmethod
-async def findNumber(cls, selectField, where=None, args=None):
-    ' find number by select and where. '
-    sql = ['select %s _num_ from `%s`' % (selectField, cls.__table__)]
-    if where:
-        sql.append('where')
-        sql.append(where)
-    rs = await select(' '.join(sql), args, 1)
-    if len(rs) == 0:
-        return None
-    return rs[0]['_num_']
-
-
-@classmethod
-async def find(cls, pk):
-    ' find object by primary key. '
-    rs = await select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
-    if len(rs) == 0:
-        return None
-    return cls(**rs[0])
-
-
-async def save(self):
-    args = list(map(self.getValueOrDefault, self.__fields__))
-    args.append(self.getValueOrDefault(self.__primary_key__))
-    rows = await execute(self.__insert__, args)
-    if rows != 1:
-        logging.warn('failed to insert record: affected rows: %s' % rows)
-
-
-async def update(self):
-    args = list(map(self.getValue, self.__fields__))
-    args.append(self.getValue(self.__primary_key__))
-    rows = await execute(self.__update__, args)
-    if rows != 1:
-        logging.warn('failed to update by primary key: affected rows: %s' % rows)
-
-
-async def remove(self):
-    args = [self.getValue(self.__primary_key__)]
-    rows = await execute(self.__delete__, args)
-    if rows != 1:
-        logging.warn('failed to remove by primary key: affected rows: %s' % rows)
-
-
-
