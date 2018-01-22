@@ -248,8 +248,15 @@ class ModelMetaclass(type):
         return type.__new__(cls, name, bases, attrs)
 
 class Model(dict, metaclass=ModelMetaclass):
+    """数据模型类
 
+    继承字典类型
+    """
     def __init__(self, **kw):
+        """初始化
+
+        :param kw:接收字典类型参数
+        """
         super(Model, self).__init__(**kw)
 
     def __getattr__(self, key):
