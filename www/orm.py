@@ -96,7 +96,7 @@ def create_args_string(num):
     L = []                  # 定义空队列
     for n in range(num):    # 循环指定次数
         L.append('?')       # 添加'?'到队列
-    return ', '.jion(L)     # 使用', '分割队列组成字符串。例如：'?, ?, ...'
+    return ', '.join(L)     # 使用', '分割队列组成字符串。例如：'?, ?, ...'
 
 class Field(object):
     """字段基类
@@ -219,7 +219,7 @@ class ModelMetaclass(type):
                 logging.info(' found mapping:%s ==> %s' % (k, v))       # 日志记录找到映射关系
                 mappings[k] = v                                         # 创建一条映射
                 if v.primary_key:                                       # 如果是主键
-                    if primaryKey:                                   # 如果之前已存在主键
+                    if primaryKey:                                      # 如果之前已存在主键
                         raise Exception('Duplicate primary key for field: %s' % k)  # 多个主键报错
                     primaryKey = k                                      # 设置主键名称为当前字段名
                 else:
