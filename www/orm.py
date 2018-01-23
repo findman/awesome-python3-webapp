@@ -313,7 +313,7 @@ class Model(dict, metaclass=ModelMetaclass):
         :param kw:orderBy/limit/
         :return:查询结果通过本类类型队列的方式返回
         """
-        sql = [cls.__select__]              # 获取查询语句
+        sql = [cls.__select__]              # 获取查询语句,并存入队列
         if where:                           # 如果存在where部分
             sql.append('where')             # 先把where加字段加进去
             sql.append(where)               # 这里的字符串对应的是字段
